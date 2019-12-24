@@ -228,6 +228,11 @@ class Device extends EventEmitter
     {
         return `Device(name:'${this.getName()}')`;
     }
+
+    close ()
+    {
+        this._reader.close();
+    }
 }
 
 module.exports = Device;

@@ -77,6 +77,7 @@ class Card extends EventEmitter
             this._device.transmit(buffer, 0x102, this._protocol).then(response => {
                 response = new ResponseApdu(response);
                 this.emit('response-received', {card: this, command, response});
+                ok(response.buffer());
             }).catch(nok);
         });
     };

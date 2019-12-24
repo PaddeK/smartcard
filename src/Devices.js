@@ -53,6 +53,11 @@ class Devices extends EventEmitter
         });
     }
 
+    close ()
+    {
+        this._pcsc.close();
+    }
+
     /**
      * @returns {Device[]}
      */
