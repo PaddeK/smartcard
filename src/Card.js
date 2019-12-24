@@ -1,71 +1,85 @@
 'use strict';
 
-import {EventEmitter} from 'events';
-import hexify from 'hexify';
-import ResponseApdu from './ResponseApdu';
+const
+    EventEmitter = require('events'),
+    ResponseApdu = require('./ResponseApdu'),
+    CommandApdu = require("./CommandApdu");
 
-
-class Card extends EventEmitter {
-
-    constructor(device, atr, protocol) {
+class Card extends EventEmitter
+{
+    /**
+     * @param {Device} device
+     * @param {Buffer} atr
+     * @param {number} protocol
+     */
+    constructor (device, atr, protocol)
+    {
         super();
-        //console.log(`new Card(${device}, ${reader}, ${status})`);
-        this.device = device;
-        this.protocol = protocol;
-        this.atr = atr.toString('hex');
+
+        /**
+         * @type {Device}
+         * @private
+         */
+        this._device = device;
+        /**
+         * @type {number}
+         * @private
+         */
+        this._protocol = protocol;
+        /**
+         * @type {string}
+         * @private
+         */
+        this._atr = atr.toString('hex');
     }
 
-    getAtr() {
-        return this.atr;
+    /**
+     * @returns {string}
+     */
+    getAtr ()
+    {
+        return this._atr;
     }
 
-    toString() {
-        return `Card(atr:'${this.atr}')`;
+    /**
+     * @returns {string}
+     */
+    toString ()
+    {
+        return `Card(atr:'${this.getAtr()}')`;
     }
 
-    issueCommand(commandApdu, callback) {
+    /**
+     * @param {CommandApdu|Buffer|string|array} apdu
+     * @returns {Promise}
+     */
+    issueCommand (apdu)
+    {
+        return new Promise((ok, nok) => {
+            let buffer;
 
-        let buffer;
-        if (Array.isArray(commandApdu)) {
-            buffer = new Buffer(commandApdu);
-        } else if (typeof commandApdu === 'string') {
-            buffer = new Buffer(hexify.toByteArray(commandApdu));
-        } else if (Buffer.isBuffer(commandApdu)) {
-            buffer = commandApdu;
-        } else if (typeof commandApdu === 'string') {
-            buffer = new Buffer(hexify.toByteArray(commandApdu));
-        } else {
-            buffer = commandApdu.toBuffer();
-        }
+            if (Array.isArray(apdu)) {
+                buffer = Buffer.from(apdu);
+            } else if (typeof apdu === 'string') {
+                buffer = Buffer.from(apdu, 'hex');
+            } else if (Buffer.isBuffer(apdu)) {
+                buffer = apdu;
+            } else if (apdu instanceof CommandApdu) {
+                buffer = apdu.toBuffer();
+            } else {
+                throw new TypeError('Apdu must be of type CommandApdu, Buffer, string or array');
+            }
 
-        const protocol = this.protocol;
+            const command = new CommandApdu({bytes: Uint8Array.from(buffer)});
 
-        this.emit('command-issued', {card: this, command: commandApdu});
-        if (callback) {
-            this.device.transmit(buffer, 0x102, protocol, (err, response) => {
-                this.emit('response-received', {
-                    card: this,
-                    command: commandApdu,
-                    response: new ResponseApdu(response)
-                });
-                callback(err, response);
-            });
-        } else {
-            return new Promise((resolve, reject) => {
-                this.device.transmit(buffer, 0x102, protocol, (err, response) => {
-                    if (err) reject(err);
-                    else {
-                        this.emit('response-received', {
-                            card: this,
-                            command: commandApdu,
-                            response: new ResponseApdu(response)
-                        });
-                        resolve(response);
-                    }
-                });
-            });
-        }
+            this.emit('command-issued', {card: this, command});
+
+            this._device.transmit(buffer, 0x102, this._protocol).then(response => {
+                response = new ResponseApdu(response);
+                this.emit('response-received', {card: this, command, response});
+            }).catch(nok);
+        });
     };
 }
 
-export default Card;
+module.exports = Card;

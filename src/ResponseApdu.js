@@ -1,6 +1,5 @@
 'use strict';
 
-
 const statusCodes = {
     '^9000$': 'Normal processing',
     '^61(.{2})$': 'Normal processing, (sw2 indicates the number of response bytes still available)',
@@ -16,9 +15,6 @@ const statusCodes = {
     '^6300$': 'no info',
     '^6381$': 'last write filled up file',
     '^6382$': 'execution successful after retry',
-//          c0	least significant nibble is a counter....
-//          ..	..valued from 0 to 15
-//          cf
     '^64(.{2})$': 'Execution error',
     '^65(.{2})$': 'Execution error',
     '^6500$': 'no info',
@@ -35,65 +31,110 @@ const statusCodes = {
     '^6c(.{2})$': 'Checking error: wrong length (sw2 indicates correct length for le)',
     '^6d(.{2})$': 'Checking error: wrong ins',
     '^6e(.{2})$': 'Checking error: class not supported',
-    '^6f(.{2})$': 'Checking error: no precise diagnosis'
+    '^6f(.{2})$': 'Checking error: no precise diagnosis',
+    // ...
+    '.*': 'Unknown'
 };
 
-
-class ResponseApdu {
-
-    constructor(buffer) {
-        this.buffer = buffer;
-        this.data = buffer.toString('hex');
+class ResponseApdu
+{
+    /**
+     * @param {Buffer|string} buffer
+     */
+    constructor (buffer)
+    {
+        /**
+         * @type {Buffer}
+         * @private
+         */
+        this._buffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer, 'hex');
+        /**
+         * @type {string}
+         * @private
+         */
+        this._data = typeof buffer === 'string' ? buffer : buffer.toString('hex');
     }
 
-    meaning() {
+    /**
+     * @returns {string}
+     */
+    meaning ()
+    {
         const statusCode = this.getStatusCode();
-        for (let prop in statusCodes) {
-            if (statusCodes.hasOwnProperty(prop)) {
-                let result = statusCodes[prop];
-                if (statusCode.match(prop)) {
-                    return result;
-                }
-            }
-        }
-        return 'Unknown';
-    }
-    getDataOnly() {
-      return this.data.substr(0, this.data.length-4);
-    }
-    getStatusCode() {
-        return this.data.substr(-4);
+        return Object.entries(statusCodes).find(([code]) => statusCode.match(code))[1];
     }
 
-    isOk() {
+    /**
+     * @return {string}
+     */
+    getDataOnly ()
+    {
+        return this._data.substr(0, this._data.length - 4);
+    }
+
+    /**
+     * @returns {string}
+     */
+    getStatusCode ()
+    {
+        return this._data.substr(-4);
+    }
+
+    /**
+     * @returns {boolean}
+     */
+    isOk ()
+    {
         return this.getStatusCode() === '9000';
     }
 
-    buffer() {
-        return this.buffer;
+    /**
+     * @returns {Buffer}
+     */
+    buffer ()
+    {
+        return this._buffer;
     }
 
-    hasMoreBytesAvailable() {
-        return this.data.substr(-4, 2) === '61';
+    /**
+     * @returns {boolean}
+     */
+    hasMoreBytesAvailable ()
+    {
+        return this._data.substr(-4, 2) === '61';
     }
 
-    numberOfBytesAvailable() {
-        let hexLength = this.data.substr(-2, 2);
-        return parseInt(hexLength, 16);
+    /**
+     * @returns {number}
+     */
+    numberOfBytesAvailable ()
+    {
+        return parseInt(this._data.substr(-2, 2), 16);
     }
 
-    isWrongLength() {
-        return this.data.substr(-4, 2) === '6c';
+    /**
+     * @returns {boolean}
+     */
+    isWrongLength ()
+    {
+        return this._data.substr(-4, 2) === '6c';
     }
 
-    correctLength() {
-        let hexLength = this.data.substr(-2, 2);
-        return parseInt(hexLength, 16);
+    /**
+     * @returns {number}
+     */
+    correctLength ()
+    {
+        return this.numberOfBytesAvailable();
     }
 
-    toString() {
-        return this.data.toString('hex');
+    /**
+     * @returns {string}
+     */
+    toString ()
+    {
+        return this._data;
     }
 }
 
-export default ResponseApdu;
+module.exports = ResponseApdu;

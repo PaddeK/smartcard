@@ -1,60 +1,83 @@
 'use strict';
 
-const pcsclite = require('pcsclite');
-import {EventEmitter} from 'events';
-import Device from './Device';
+const
+    EventEmitter = require('events'),
+    pcsclite = require('@paddek/pcsclite'),
+    Device = require('./Device');
 
-
-class Devices extends EventEmitter {
-    constructor() {
+class Devices extends EventEmitter
+{
+    /**
+     * @typedef Options
+     * @type {Object}
+     * @property {number} shareMode
+     * @property {number} disposition
+     * @property {boolean} autoConnect
+     * @property {boolean} autoDisconnect
+     * @property {function} isCardInserted
+     * @property {function} isCardRemoved
+     */
+    /**
+     * @param {Options} options
+     */
+    constructor (options = {})
+    {
         super();
-        //console.log(`new Devices()`);
-        this.pcsc = pcsclite();
-        this.devices = {};
 
-        this.pcsc.on('reader', (reader) => {
-            const device = new Device(reader);
-            this.devices[reader.name] = device;
+        /**
+         * @type {pcsclite}
+         * @private
+         */
+        this._pcsc = pcsclite();
+        /**
+         * @type {object}
+         * @private
+         */
+        this._devices = {};
+
+        this._pcsc.on('error', error => {
+            this.emit('error', {error});
+        }).on('reader', reader => {
+            const device = new Device(reader, options);
+
+            this._devices[reader.name] = device;
+
             this.emit('device-activated', {device, devices: this.listDevices()});
-            reader.on('end', () => {
-                delete this.devices[reader.name];
+
+            reader.on('error', error => {
+                this.emit('error', {reader, error});
+            }).on('end', () => {
+                delete this._devices[reader.name];
                 this.emit('device-deactivated', {device, devices: this.listDevices()});
             });
-            reader.on('error', (error) => {
-                this.emit('error', {reader, error});
-            });
-        });
-
-        this.pcsc.on('error', (error) => {
-            this.emit('error', {error});
         });
     }
 
-    onActivated() {
-      return new Promise((resolve, reject) => {
-          this.on('device-activated', event => resolve(event));
-      });
+    /**
+     * @returns {Device[]}
+     */
+    listDevices ()
+    {
+        return Object.values(this._devices);
     };
 
-    onDeactivated() {
-        return new Promise((resolve, reject) => {
-            this.on('device-deactivated', event => resolve(event));
-        });
+    /**
+     * @param {string} name
+     * @returns {Device|undefined}
+     */
+    lookup (name)
+    {
+        return this._devices[name];
     };
 
-    listDevices() {
-        return Object.keys(this.devices).map((k) => this.devices[k])
-    };
-
-    lookup(name) {
-        return this.devices[name];
-    };
-
-    toString() {
+    /**
+     * @returns {string}
+     */
+    toString ()
+    {
         return `Devices('${this.listDevices()}')`;
     }
 }
-
 
 module.exports = Devices;
 

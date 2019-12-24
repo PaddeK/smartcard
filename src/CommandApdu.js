@@ -1,96 +1,55 @@
 'use strict';
 
-import {EventEmitter} from 'events';
-import hexify from 'hexify';
+class CommandApdu
+{
+    /**
+     * @typedef ApduObject
+     * @type {Object}
+     * @property {number} le
+     * @param {ApduObject} apdu
+     */
+    constructor (apdu)
+    {
+        const {cla, ins, p1, p2, data, le, bytes} = apdu;
 
-/*
-CASE    COMMAND     RESPONSE
-1       NO DATA     NO DATA
-2       DATA        NO DATA
-3       NO DATA     DATA
-4       DATA        DATA
-*/
-
-class CommandApdu {
-    constructor(obj) {
-
-        if (obj.bytes) {
-
-            this.bytes = obj.bytes;
-            
-        } else {
-
-            let size = obj.size;
-            let cla = obj.cla;
-            let ins = obj.ins;
-            let p1 = obj.p1;
-            let p2 = obj.p2;
-            let data = obj.data;
-            let le = obj.le || 0;
-            let lc;
-
-            // case 1
-            if (!size && !data && !le) {
-                //le = -1;
-                //console.info('case 1');
-                size = 4;
-            }
-            // case 2
-            else if (!size && !data) {
-                //console.info('case 2');
-                size = 4 + 2;
-            }
-
-            // case 3
-            else if (!size && !le) {
-                //console.info('case 3');
-                size = data.length + 5 + 4;
-                //le = -1;
-            }
-
-            // case 4
-            else if (!size) {
-                //console.info('case 4');
-                size = data.length + 5 + 4;
-            }
-
-            // set data
-            if (data) {
-                lc = data.length;
-            } else {
-                //lc = 0;
-            }
-
-            this.bytes = [];
-            this.bytes.push(cla);
-            this.bytes.push(ins);
-            this.bytes.push(p1);
-            this.bytes.push(p2);
-
-            if (data) {
-                this.bytes.push(lc);
-                this.bytes = this.bytes.concat(data);
-            }
-            this.bytes.push(le);
-        }
+        /**
+         * @type {number[]}
+         * @private
+         */
+        this._bytes = bytes || [cla, ins, p1, p2].concat(data ? [data.length].concat(data) : [], le || 0);
     }
 
-    toString() {
-        return hexify.toHexString(this.bytes);
+    /**
+     * @returns {string}
+     */
+    toString ()
+    {
+        return this.toBuffer().toString('hex');
     }
 
-    toByteArray() {
-        return this.bytes;
+    /**
+     * @returns {number[]}
+     */
+    toByteArray ()
+    {
+        return this._bytes;
     }
 
-    toBuffer() {
-        return new Buffer(this.bytes);
+    /**
+     * @returns {Buffer}
+     */
+    toBuffer ()
+    {
+        return Buffer.from(this._bytes);
     }
 
-    setLe(le) {
-        this.bytes.pop();
-        this.bytes.push(le);
+    /**
+     * @param {number|string} le
+     */
+    setLe (le)
+    {
+        this._bytes = this._bytes.slice(0, -1).concat(~~le);
     }
 }
 
-export default CommandApdu;
+module.exports = CommandApdu;

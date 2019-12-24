@@ -1,7 +1,11 @@
+# Fork of [tomkp's](https://www.npmjs.com/~tomkp) [smartcard](https://github.com/tomkp/smartcard) library.
+
+Changes:
+* more flexible (hopefully) see: **Class: Devices constructor**
+* events for card detection, card leaving and state change for better control
+* depends on [PaddeK's](https://github.com/paddek) fork of [pcsclite](https://github.com/paddek/node-pcsclite) which fixes node v12 compilation errors and warnings
+
 # smartcard
-
-
-Smartcard library.
 
 This is a simple wrapper around [Santiago Gimeno's](https://www.npmjs.org/~sgimeno) great [pcsclite](https://github.com/santigimeno/node-pcsclite) library.
 
@@ -39,27 +43,21 @@ Returns `Object`:
 #### Methods
 The following methods are available within the `devices` class.
 
-##### Constructor
-The constructor for a devices object takes no arguments,
-```javascript
-devices = new Devices();
-```
-##### `devices.onActivated()`
-Returns `Promise`
-* Resolves with activation _event_
-
-##### `devices.onDeactivated()`
-Returns `Promise`
-* Resolves with deactivation _event_
+##### Constructor `Devices(options)`
+The constructor for a devices object takes one optional argument.
+* _options_ `Object`
+  * **_shareMode_** `Number` (optional): The shareMode the autoConnect uses **_(default: SCARD_SHARE_SHARED)_**
+  * **_disposition_** `Number` (optional): The disposition the autoDisconnect uses **_(default: SCARD_LEAVE_CARD)_**
+  * **_autoConnect_** `Boolean` (optional): Auto connect after card-detected event **_(default: true)_**
+  * **_autoDisconnect_** `Boolean` (optional): Auto disconnect after card-left event **_(default: true)_**
+  * **_isCardInserted_** `Function` (optional): Function to determine if card is inserted **_(default: preserve smartcard behaviour)_**
+  * **_isCardRemoved_** `Function` (optional): Function to determine if card is removed **_(default: preserve smartcard behaviour)_**
 
 ##### `devices.listDevices()`
 Returns `Object` a list of the different devices attached, each a `device` object
 
 ##### `devices.lookup(name)`
 * _name_ `String`: The text name of a device
-
-* Returns `Device`
-
 
 
 ### Class: Device
@@ -68,17 +66,42 @@ An object representing a specific card reader (device).
 #### Methods
 The following methods are available within the `device` class.
 
+##### `device.getCard()`
+Returns the `Card` inserted in the attached device.
+
 ##### `device.getName()`
 Returns the name of the attached device.
+
+##### `device.getStatus()`
+Returns the current status of the attached device.
+
+##### `device.connect(options)`
+Connects to attached device and sets reference to inserted `Card`.
+* _options_ `Object`
+  * _share_mode_ `Number` (optional): The share mode to use _(default: SCARD_SHARE_EXCLUSIVE)_
+  * _protocol_ `Number` (optional): The prefered protocol _(default: SCARD_PROTOCOL_T0 | SCARD_PROTOCOL_T1)_ 
+
+Returns `Promise`
+  * Resolves with _event_ `Object`
+  * Rejects with _error_ `Error`
+
+##### `device.disconnect(disposition)`
+Disconnect from attached device and remove reference to inserted `Card`.
+* _disposition_ `Number` (optional): The share mode to use _(default: SCARD_UNPOWER_CARD)_
+
+Returns `Promise`
+  * Resolves with _event_ `Object`
+  * Rejects with _error_ `Error`
 
 ##### `device.transmit(data, res_len, protocol, cb)`
 Sends a command to the connected device
 * _data_ `Buffer`: data to be transmitted
 * _res_len_ `Number`: Maximum length of the expected response, includes the 2 byte response (sw1 and sw2)
 * _protocol_ `Number`: Protocol to be used in the transmission
-* _cb(error,response)_ `Function`: Called when transmit function completes
-  * _error_ `Error`
-  * _output_ `Buffer`
+
+Returns `Promise`
+  * Resolves with _response_ `Buffer`
+  * Rejects with _error_ `Error`
 
 #### Events
 The `device` object emits the following events
@@ -88,6 +111,7 @@ Emitted when a smartcard is inserted into a card reader
 
 Returns `Object`:
 * _device_ `Device`
+* _protocol_ `Number`
 * _card_ `Card`
 
 ##### Event: 'card-removed'
@@ -96,6 +120,27 @@ Emitted when a smartcard is removed from a card reader
 Returns `Object`:
 * _name_ `String`
 * _card_ `Card`
+
+##### Event: 'card-detected'
+Emitted when a smartcard is about to be inserted into a card reader
+
+Returns `Object`:
+* _state_ `Number`
+* _atr_ `String`
+
+##### Event: 'status'
+Emitted when the state of a card reader changes
+
+Returns `Object`:
+* _state_ `Number`
+* _atr_ `String`
+
+##### Event: 'card-left'
+Emitted when a smartcard is about to be removed from a card reader
+
+Returns `Object`:
+* _state_ `Number`
+* _atr_ `String`
 
 ### Class: Card
 An object representing an attached smart card.
@@ -106,16 +151,13 @@ The following methods are available within the `card` class.
 ##### `card.getAtr()`
 Returns `String` containing the atr of the card
 
-##### `card.issueCommand(commandApdu, callback)`
+##### `card.issueCommand(commandApdu)`
 Sends a command to the card
 * _commandApdu_: The command to be sent to the card
   * `String`
   * `Buffer`
   * `Array`
   * `CommandApdu`
-* _callback(error,response)_: (optional) Function to call upon completion of the command
-  * _error_ `Error`
-  * _response_ `Buffer`
 
 Returns `Promise`
   * Resolves with _response_ `Buffer`
@@ -131,14 +173,14 @@ Emitted when a command is sent to the smartcard.
 
 Returns `Object`:
 * _card_ `Card`
-* _command_ `Buffer`
+* _command_ `CommandApdu`
 
 ##### Event: 'response-received'
 Emitted when a response is received from the card.
 
 Returns `Object`:
 * _card_ `Card`
-* _command_ `Buffer`
+* _command_ `CommandApdu`
 * _response_ `ResponseApdu`
 
 ### Class: CommandApdu
@@ -158,8 +200,8 @@ Creates a new instance and sets the appropriate items
   * _le_ `Number` (optional): The value of le
 
 OR
-* _obj_ `Array`: Byte array representing the whole command
-
+* _obj_ `Object`
+    * _bytes_ `Array`: Byte array representing the whole command
 ##### `CommandApdu.toBuffer()`
 Converts the command to a Buffer
 * Returns `Buffer`
@@ -176,13 +218,12 @@ Converts the command to a byte array
 Updates the le value of the command
 * _le_ `Number`: The new le value
 
+
 ### Class: ResponseApdu
 Class representing a response from the card
 
 #### Methods
 The `ResponseApdu` class has the following methods.
-
-##### Constructor
 
 ##### `ResponseApdu.meaning()`
 Interprets the return code and attempts to provide a text translation.
@@ -285,7 +326,7 @@ Returns `Object`:
 ```javascript
 'use strict';
 
-const smartcard = require('smartcard');
+const smartcard = require('@paddek/smartcard');
 const Devices = smartcard.Devices;
 const devices = new Devices();
 
@@ -298,33 +339,13 @@ devices.on('device-activated', (event => {
 }));
 ```
 
-
-### Using promises
-
-```javascript
-'use strict';
-
-const smartcard = require('smartcard');
-const Devices = smartcard.Devices;
-const devices = new Devices();
-
-
-devices.onActivated().then(event => {
-    console.log(`Device '${event.device}' activated`);
-    event.devices.map((device, index) => {
-        console.log(`Device #${index + 1}: '${device.name}'`);
-    });
-});
-```
-
-
 ### Selecting the Payment Systems Environment on an EMV (Chip & Pin) card
 
 
 ```javascript
 'use strict';
 
-const smartcard = require('smartcard');
+const smartcard = require('@paddek/smartcard');
 const Devices = smartcard.Devices;
 const Iso7816Application = smartcard.Iso7816Application;
 
